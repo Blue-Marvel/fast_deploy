@@ -31,7 +31,8 @@ done
 
 # Flavors detection from shorebird.yaml
 if [ -f "$PROJECT_ROOT/shorebird.yaml" ]; then
-  FLAVORS=$(grep "flavor:" "$PROJECT_ROOT/shorebird.yaml" | awk '{print $2}' | tr '\n' ',' | sed 's/,$//')
+  # Look for "flavor: name" or "flavor:name"
+  FLAVORS=$(grep -oE "flavor:[[:space:]]*[a-zA-Z0-9_-]+" "$PROJECT_ROOT/shorebird.yaml" | cut -d':' -f2 | tr -d ' ' | tr '\n' ',' | sed 's/,$//')
   emit "flavors" "$FLAVORS"
 fi
 

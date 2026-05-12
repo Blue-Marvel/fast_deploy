@@ -23,6 +23,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
   PlayTrack _track = PlayTrack.internal;
   String? _selectedFlavor;
   String? _selectedTarget;
+  final _flavorController = TextEditingController();
   bool _skipUpload = false;
   bool _launching = false;
   late final TabController _tabController;
@@ -62,6 +63,7 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
   void dispose() {
     _tabController.dispose();
     _releaseVersionController.dispose();
+    _flavorController.dispose();
     super.dispose();
   }
 
@@ -107,11 +109,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
         controller: _tabController,
         children: [
           _DeployTab(
+            key: const ValueKey('deploy_tab'),
             project: project,
             platform: _platform,
             action: _action,
             track: _track,
             flavor: _selectedFlavor,
+            flavorController: _flavorController,
             target: _selectedTarget,
             skipUpload: _skipUpload,
             launching: _launching,
@@ -138,11 +142,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
 
   Future<void> _launch(Project project) async {
     if (_launching) return;
+    final flavor = _selectedFlavor ??
+        (_flavorController.text.trim().isEmpty
+            ? null
+            : _flavorController.text.trim());
+
     final config = DeployConfig(
       platform: _platform,
       action: _action,
       playTrack: _track,
-      flavor: _selectedFlavor,
+      flavor: flavor,
       target: _selectedTarget,
       skipUpload: _skipUpload,
       releaseVersion: _releaseVersionController.text.trim().isEmpty
@@ -179,11 +188,13 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
 
 class _DeployTab extends StatelessWidget {
   const _DeployTab({
+    super.key,
     required this.project,
     required this.platform,
     required this.action,
     required this.track,
     required this.flavor,
+    required this.flavorController,
     required this.target,
     required this.skipUpload,
     required this.launching,
@@ -202,6 +213,7 @@ class _DeployTab extends StatelessWidget {
   final DeployAction action;
   final PlayTrack track;
   final String? flavor;
+  final TextEditingController flavorController;
   final String? target;
   final bool skipUpload;
   final bool launching;
@@ -258,6 +270,19 @@ class _DeployTab extends StatelessWidget {
                     onSelected: (selected) => onFlavor(selected ? f : null),
                   ),
               ],
+            ),
+          )
+        else
+          _Section(
+            title: 'Flavor (Manual)',
+            subtitle: 'If flavors are not detected, enter it manually (e.g. dev, prod).',
+            child: TextField(
+              controller: flavorController,
+              decoration: const InputDecoration(
+                hintText: 'e.g. dev',
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
             ),
           ),
         if (project.targets.isNotEmpty)
