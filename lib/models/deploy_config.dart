@@ -44,6 +44,8 @@ class DeployConfig {
     this.playTrack = PlayTrack.internal,
     this.skipUpload = false,
     this.releaseVersion,
+    this.flavor,
+    this.target,
   });
 
   final DeployPlatform platform;
@@ -54,12 +56,17 @@ class DeployConfig {
   /// For patch jobs only. Null means "latest".
   final String? releaseVersion;
 
+  final String? flavor;
+  final String? target;
+
   DeployConfig copyWith({
     DeployPlatform? platform,
     DeployAction? action,
     PlayTrack? playTrack,
     bool? skipUpload,
     String? releaseVersion,
+    String? flavor,
+    String? target,
   }) {
     return DeployConfig(
       platform: platform ?? this.platform,
@@ -67,6 +74,8 @@ class DeployConfig {
       playTrack: playTrack ?? this.playTrack,
       skipUpload: skipUpload ?? this.skipUpload,
       releaseVersion: releaseVersion ?? this.releaseVersion,
+      flavor: flavor ?? this.flavor,
+      target: target ?? this.target,
     );
   }
 }

@@ -31,9 +31,16 @@ command -v shorebird >/dev/null || {
 }
 
 echo "→ Building Android release with Shorebird (Flutter $FLUTTER_VERSION)"
-shorebird release android --flutter-version="$FLUTTER_VERSION"
+shorebird release android \
+  --flutter-version="$FLUTTER_VERSION" \
+  ${FLAVOR:+--flavor "$FLAVOR"} \
+  ${TARGET:+-t "lib/$TARGET"}
 
-AAB_PATH="build/app/outputs/bundle/release/app-release.aab"
+if [ -n "$FLAVOR" ]; then
+  AAB_PATH="build/app/outputs/bundle/${FLAVOR}Release/app-${FLAVOR}-release.aab"
+else
+  AAB_PATH="build/app/outputs/bundle/release/app-release.aab"
+fi
 [ -f "$AAB_PATH" ] || { echo "AAB not found at $AAB_PATH after build" >&2; exit 1; }
 
 if $SKIP_UPLOAD; then

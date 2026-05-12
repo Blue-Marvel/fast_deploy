@@ -225,6 +225,17 @@ class ScriptRunner {
       }
     }
     await handle.exitCode;
+
+    // Parse flavors and targets if present
+    if (result.containsKey('flavors')) {
+      final flavorsStr = result['flavors']!;
+      result['flavors_list'] = flavorsStr.isEmpty ? '' : flavorsStr;
+    }
+    if (result.containsKey('targets')) {
+      final targetsStr = result['targets']!;
+      result['targets_list'] = targetsStr.isEmpty ? '' : targetsStr;
+    }
+
     return result;
   }
 

@@ -14,6 +14,9 @@ RELEASE_VERSION="${RELEASE_VERSION:-latest}"
 command -v shorebird >/dev/null || { echo "shorebird CLI not installed" >&2; exit 1; }
 
 echo "→ Building Android patch via Shorebird (release: $RELEASE_VERSION)"
-shorebird patch android --release-version="$RELEASE_VERSION"
+shorebird patch android \
+  --release-version="$RELEASE_VERSION" \
+  ${FLAVOR:+--flavor "$FLAVOR"} \
+  ${TARGET:+-t "lib/$TARGET"}
 
 echo "✓ Android patch shipped"

@@ -112,6 +112,8 @@ rm -f build/ios/ipa/*.ipa 2>/dev/null || true
 echo "→ Building iOS release with Shorebird (Flutter $FLUTTER_VERSION)"
 shorebird release ios \
   --flutter-version="$FLUTTER_VERSION" \
+  ${FLAVOR:+--flavor "$FLAVOR"} \
+  ${TARGET:+-t "lib/$TARGET"} \
   --export-method app-store \
   -- --obfuscate --split-debug-info=build/ios/symbols
 

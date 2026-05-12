@@ -29,6 +29,16 @@ done
 [ -f "$PROJECT_ROOT/pubspec.yaml" ] && emit "pubspec" "true" || emit "pubspec" "false"
 [ -f "$PROJECT_ROOT/shorebird.yaml" ] && emit "shorebird_yaml" "true" || emit "shorebird_yaml" "false"
 
+# Flavors detection from shorebird.yaml
+if [ -f "$PROJECT_ROOT/shorebird.yaml" ]; then
+  FLAVORS=$(grep "flavor:" "$PROJECT_ROOT/shorebird.yaml" | awk '{print $2}' | tr '\n' ',' | sed 's/,$//')
+  emit "flavors" "$FLAVORS"
+fi
+
+# Targets detection (lib/main*.dart)
+TARGETS=$(find "$PROJECT_ROOT/lib" -maxdepth 1 -name "main*.dart" -exec basename {} \; | tr '\n' ',' | sed 's/,$//')
+emit "targets" "$TARGETS"
+
 # Code-signing identities (just the count, don't leak names)
 DIST_COUNT="$(security find-identity -v -p codesigning 2>/dev/null | grep -c 'Apple Distribution' || true)"
 emit "apple_distribution_certs" "$DIST_COUNT"

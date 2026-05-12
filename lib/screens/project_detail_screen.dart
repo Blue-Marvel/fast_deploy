@@ -21,6 +21,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
   DeployPlatform _platform = DeployPlatform.android;
   DeployAction _action = DeployAction.release;
   PlayTrack _track = PlayTrack.internal;
+  String? _selectedFlavor;
+  String? _selectedTarget;
   bool _skipUpload = false;
   bool _launching = false;
   late final TabController _tabController;
@@ -30,6 +32,30 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
   void initState() {
     super.initState();
     _tabController = TabController(length: 4, vsync: this);
+    WidgetsBinding.instance.addPostFrameCallback((_) => _runPreflight());
+  }
+
+  Future<void> _runPreflight() async {
+    final controller = context.read<DeployController>();
+    final project = _findProject(controller);
+    if (project == null) return;
+
+    final results = await controller.runner.preflight(project.path);
+    final flavors =
+        results['flavors']?.split(',').where((s) => s.isNotEmpty).toList() ??
+        const [];
+    final targets =
+        results['targets']?.split(',').where((s) => s.isNotEmpty).toList() ??
+        const [];
+
+    if (flavors.isNotEmpty || targets.isNotEmpty) {
+      final updated = project.copyWith(flavors: flavors, targets: targets);
+      await controller.updateProject(updated);
+      setState(() {
+        if (flavors.isNotEmpty) _selectedFlavor = flavors.first;
+        if (targets.isNotEmpty) _selectedTarget = targets.first;
+      });
+    }
   }
 
   @override
@@ -85,12 +111,16 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
             platform: _platform,
             action: _action,
             track: _track,
+            flavor: _selectedFlavor,
+            target: _selectedTarget,
             skipUpload: _skipUpload,
             launching: _launching,
             releaseVersionController: _releaseVersionController,
             onPlatform: _setPlatform,
             onAction: (v) => setState(() => _action = v),
             onTrack: (v) => setState(() => _track = v),
+            onFlavor: (v) => setState(() => _selectedFlavor = v),
+            onTarget: (v) => setState(() => _selectedTarget = v),
             onSkipUpload: (v) => setState(() => _skipUpload = v),
             onLaunch: () => _launch(project),
           ),
@@ -112,6 +142,8 @@ class _ProjectDetailScreenState extends State<ProjectDetailScreen>
       platform: _platform,
       action: _action,
       playTrack: _track,
+      flavor: _selectedFlavor,
+      target: _selectedTarget,
       skipUpload: _skipUpload,
       releaseVersion: _releaseVersionController.text.trim().isEmpty
           ? null
@@ -151,12 +183,16 @@ class _DeployTab extends StatelessWidget {
     required this.platform,
     required this.action,
     required this.track,
+    required this.flavor,
+    required this.target,
     required this.skipUpload,
     required this.launching,
     required this.releaseVersionController,
     required this.onPlatform,
     required this.onAction,
     required this.onTrack,
+    required this.onFlavor,
+    required this.onTarget,
     required this.onSkipUpload,
     required this.onLaunch,
   });
@@ -165,12 +201,16 @@ class _DeployTab extends StatelessWidget {
   final DeployPlatform platform;
   final DeployAction action;
   final PlayTrack track;
+  final String? flavor;
+  final String? target;
   final bool skipUpload;
   final bool launching;
   final TextEditingController releaseVersionController;
   final ValueChanged<DeployPlatform> onPlatform;
   final ValueChanged<DeployAction> onAction;
   final ValueChanged<PlayTrack> onTrack;
+  final ValueChanged<String?> onFlavor;
+  final ValueChanged<String?> onTarget;
   final ValueChanged<bool> onSkipUpload;
   final VoidCallback onLaunch;
 
@@ -203,6 +243,40 @@ class _DeployTab extends StatelessWidget {
             onSelectionChanged: (s) => onPlatform(s.first),
           ),
         ),
+        if (project.flavors.isNotEmpty)
+          _Section(
+            title: 'Flavor',
+            subtitle: 'Choose which build flavor to use.',
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 8,
+              children: [
+                for (final f in project.flavors)
+                  ChoiceChip(
+                    label: Text(f),
+                    selected: flavor == f,
+                    onSelected: (selected) => onFlavor(selected ? f : null),
+                  ),
+              ],
+            ),
+          ),
+        if (project.targets.isNotEmpty)
+          _Section(
+            title: 'Entry Point (Target)',
+            subtitle: 'Select the main entry file (e.g. lib/main_dev.dart).',
+            child: DropdownButtonFormField<String>(
+              value: target,
+              decoration: const InputDecoration(
+                isDense: true,
+                border: OutlineInputBorder(),
+              ),
+              items: [
+                for (final t in project.targets)
+                  DropdownMenuItem(value: t, child: Text(t)),
+              ],
+              onChanged: onTarget,
+            ),
+          ),
         _Section(
           title: 'Action',
           subtitle:

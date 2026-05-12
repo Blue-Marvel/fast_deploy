@@ -26,9 +26,15 @@ done
 [ -f android/key.properties ] || { echo "Missing android/key.properties" >&2; exit 1; }
 
 echo "→ Building Android release with Flutter (no Shorebird)"
-flutter build appbundle --release
+flutter build appbundle --release \
+  ${FLAVOR:+--flavor "$FLAVOR"} \
+  ${TARGET:+-t "lib/$TARGET"}
 
-AAB_PATH="build/app/outputs/bundle/release/app-release.aab"
+if [ -n "$FLAVOR" ]; then
+  AAB_PATH="build/app/outputs/bundle/${FLAVOR}Release/app-${FLAVOR}-release.aab"
+else
+  AAB_PATH="build/app/outputs/bundle/release/app-release.aab"
+fi
 [ -f "$AAB_PATH" ] || { echo "AAB not found at $AAB_PATH after build" >&2; exit 1; }
 
 if ! $DO_UPLOAD; then

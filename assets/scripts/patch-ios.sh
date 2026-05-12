@@ -23,6 +23,8 @@ fi
 echo "→ Building iOS patch via Shorebird (release: $RELEASE_VERSION)"
 shorebird patch ios \
   --release-version="$RELEASE_VERSION" \
+  ${FLAVOR:+--flavor "$FLAVOR"} \
+  ${TARGET:+-t "lib/$TARGET"} \
   -- --no-codesign
 
 echo "✓ iOS patch shipped"

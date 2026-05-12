@@ -10,6 +10,8 @@ class Project {
     this.appIdentifier,
     this.packageName,
     this.flutterVersion = '3.41.9',
+    this.flavors = const [],
+    this.targets = const [],
     DateTime? addedAt,
   }) : addedAt = addedAt ?? DateTime.now();
 
@@ -19,6 +21,8 @@ class Project {
   final String? appIdentifier;
   final String? packageName;
   final String flutterVersion;
+  final List<String> flavors;
+  final List<String> targets;
   final DateTime addedAt;
 
   Project copyWith({
@@ -27,6 +31,8 @@ class Project {
     Object? appIdentifier = _unset,
     Object? packageName = _unset,
     String? flutterVersion,
+    List<String>? flavors,
+    List<String>? targets,
   }) {
     return Project(
       id: id,
@@ -39,6 +45,8 @@ class Project {
           ? this.packageName
           : packageName as String?,
       flutterVersion: flutterVersion ?? this.flutterVersion,
+      flavors: flavors ?? this.flavors,
+      targets: targets ?? this.targets,
       addedAt: addedAt,
     );
   }
@@ -50,6 +58,8 @@ class Project {
     'appIdentifier': appIdentifier,
     'packageName': packageName,
     'flutterVersion': flutterVersion,
+    'flavors': flavors,
+    'targets': targets,
     'addedAt': addedAt.toIso8601String(),
   };
 
@@ -60,6 +70,8 @@ class Project {
     appIdentifier: json['appIdentifier'] as String?,
     packageName: json['packageName'] as String?,
     flutterVersion: (json['flutterVersion'] as String?) ?? '3.41.9',
+    flavors: (json['flavors'] as List<Object?>?)?.cast<String>() ?? const [],
+    targets: (json['targets'] as List<Object?>?)?.cast<String>() ?? const [],
     addedAt: DateTime.parse(json['addedAt'] as String),
   );
 

@@ -169,15 +169,20 @@ class DeployOrchestrator {
   }
 
   List<_Step> _planSteps(Project project, DeployConfig c) {
+    final extra = <String, String>{
+      if (c.flavor != null && c.flavor!.isNotEmpty) 'FLAVOR': c.flavor!,
+      if (c.target != null && c.target!.isNotEmpty) 'TARGET': c.target!,
+    };
+
     switch (c.action) {
       case DeployAction.release:
-        return _releaseSteps(c);
+        return _releaseSteps(c, extra);
       case DeployAction.patch:
-        return _patchSteps(c);
+        return _patchSteps(c, extra);
       case DeployAction.buildNoShorebird:
-        return _buildNoShorebirdSteps(c);
+        return _buildNoShorebirdSteps(c, extra);
       case DeployAction.releaseNoShorebird:
-        return _releaseNoShorebirdSteps(c);
+        return _releaseNoShorebirdSteps(c, extra);
       case DeployAction.buildAndOpenXcode:
         if (c.platform != DeployPlatform.ios) return const [];
         return [
@@ -185,12 +190,13 @@ class DeployOrchestrator {
             label: 'Build iOS IPA & open Xcode',
             script: 'build-ios.sh',
             args: const ['--open-xcode'],
+            extraEnv: extra,
           ),
         ];
     }
   }
 
-  List<_Step> _releaseSteps(DeployConfig c) {
+  List<_Step> _releaseSteps(DeployConfig c, Map<String, String> extra) {
     final out = <_Step>[];
     if (c.platform == DeployPlatform.android ||
         c.platform == DeployPlatform.both) {
@@ -199,7 +205,7 @@ class DeployOrchestrator {
           label: 'Android release',
           script: 'release-android.sh',
           args: c.skipUpload ? const ['--no-upload'] : const [],
-          extraEnv: {'PLAY_TRACK': c.playTrack.value},
+          extraEnv: {...extra, 'PLAY_TRACK': c.playTrack.value},
         ),
       );
     }
@@ -209,15 +215,17 @@ class DeployOrchestrator {
           label: 'iOS release',
           script: 'release-ios.sh',
           args: c.skipUpload ? const ['--no-upload'] : const [],
+          extraEnv: extra,
         ),
       );
     }
     return out;
   }
 
-  List<_Step> _patchSteps(DeployConfig c) {
+  List<_Step> _patchSteps(DeployConfig c, Map<String, String> extra) {
     final out = <_Step>[];
-    final extra = <String, String>{
+    final patchExtra = <String, String>{
+      ...extra,
       if (c.releaseVersion != null && c.releaseVersion!.isNotEmpty)
         'RELEASE_VERSION': c.releaseVersion!,
     };
@@ -227,19 +235,23 @@ class DeployOrchestrator {
         _Step(
           label: 'Android patch',
           script: 'patch-android.sh',
-          extraEnv: extra,
+          extraEnv: patchExtra,
         ),
       );
     }
     if (c.platform == DeployPlatform.ios || c.platform == DeployPlatform.both) {
       out.add(
-        _Step(label: 'iOS patch', script: 'patch-ios.sh', extraEnv: extra),
+        _Step(
+          label: 'iOS patch',
+          script: 'patch-ios.sh',
+          extraEnv: patchExtra,
+        ),
       );
     }
     return out;
   }
 
-  List<_Step> _buildNoShorebirdSteps(DeployConfig c) {
+  List<_Step> _buildNoShorebirdSteps(DeployConfig c, Map<String, String> extra) {
     final out = <_Step>[];
     if (c.platform == DeployPlatform.android ||
         c.platform == DeployPlatform.both) {
@@ -247,16 +259,26 @@ class DeployOrchestrator {
         _Step(
           label: 'Android build (No Shorebird)',
           script: 'build-android.sh',
+          extraEnv: extra,
         ),
       );
     }
     if (c.platform == DeployPlatform.ios || c.platform == DeployPlatform.both) {
-      out.add(_Step(label: 'iOS build (No Shorebird)', script: 'build-ios.sh'));
+      out.add(
+        _Step(
+          label: 'iOS build (No Shorebird)',
+          script: 'build-ios.sh',
+          extraEnv: extra,
+        ),
+      );
     }
     return out;
   }
 
-  List<_Step> _releaseNoShorebirdSteps(DeployConfig c) {
+  List<_Step> _releaseNoShorebirdSteps(
+    DeployConfig c,
+    Map<String, String> extra,
+  ) {
     final uploadArgs = c.skipUpload ? const <String>[] : const ['--upload'];
     final out = <_Step>[];
     if (c.platform == DeployPlatform.android ||
@@ -266,7 +288,7 @@ class DeployOrchestrator {
           label: 'Android release (No Shorebird)',
           script: 'build-android.sh',
           args: uploadArgs,
-          extraEnv: {'PLAY_TRACK': c.playTrack.value},
+          extraEnv: {...extra, 'PLAY_TRACK': c.playTrack.value},
         ),
       );
     }
@@ -276,6 +298,7 @@ class DeployOrchestrator {
           label: 'iOS release (No Shorebird)',
           script: 'build-ios.sh',
           args: uploadArgs,
+          extraEnv: extra,
         ),
       );
     }

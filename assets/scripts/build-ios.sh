@@ -110,7 +110,10 @@ fastlane run update_code_signing_settings \
 rm -f build/ios/ipa/*.ipa 2>/dev/null || true
 
 echo "→ Building iOS release with Flutter (no Shorebird)"
-flutter build ipa --release --export-method app-store --obfuscate --split-debug-info=build/ios/symbols
+flutter build ipa --release \
+  ${FLAVOR:+--flavor "$FLAVOR"} \
+  ${TARGET:+-t "lib/$TARGET"} \
+  --export-method app-store --obfuscate --split-debug-info=build/ios/symbols
 
 IPA_PATH="$(ls -1 build/ios/ipa/*.ipa 2>/dev/null | head -n1 || true)"
 if [ -z "$IPA_PATH" ]; then
