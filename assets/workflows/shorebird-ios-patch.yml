@@ -1,0 +1,41 @@
+name: Shorebird iOS Patch
+
+on:
+  workflow_dispatch:
+
+jobs:
+  patch:
+    runs-on: macos-15
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Create .env file
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          APPROVAL_PUBLIC_KEY: ${{ secrets.APPROVAL_PUBLIC_KEY }}
+        run: |
+          : "${GOOGLE_API_KEY:?GOOGLE_API_KEY secret is empty/unset}"
+          : "${APPROVAL_PUBLIC_KEY:?APPROVAL_PUBLIC_KEY secret is empty/unset}"
+          printf 'GOOGLE_API_KEY=%s\n' "$GOOGLE_API_KEY" > .env
+          printf 'APPROVAL_PUBLIC_KEY=%s\n' "$APPROVAL_PUBLIC_KEY" >> .env
+
+      - name: Setup Shorebird
+        uses: shorebirdtech/setup-shorebird@v1
+        with:
+          cache: true
+
+      - name: Shorebird Patch iOS
+        uses: shorebirdtech/shorebird-patch@v1
+        env:
+          SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+        with:
+          release-version: latest
+          platform: ios
+          flutter-version: "3.41.9"
+          args: "--no-codesign"

@@ -1,0 +1,64 @@
+name: Shorebird Android Release
+
+on:
+  workflow_dispatch:
+     inputs:
+      play_track:
+        description: "Play Console track to upload to"
+        required: true
+        default: "internal"
+        type: choice
+        options:
+          - internal
+          - alpha
+          - beta
+          - production
+
+jobs:
+  release:
+    runs-on: macos-latest
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Setup Java
+        uses: actions/setup-java@v3
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Decode Android Keystore
+        run: |
+          echo "${{ secrets.KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+          echo "storeFile=upload-keystore.jks" >> android/key.properties
+          echo "storePassword=${{ secrets.KEYSTORE_PASSWORD }}" >> android/key.properties
+          echo "keyAlias=${{ secrets.KEY_ALIAS }}" >> android/key.properties
+          echo "keyPassword=${{ secrets.KEY_PASSWORD }}" >> android/key.properties
+      - name: Create .env file
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          APPROVAL_PUBLIC_KEY: ${{ secrets.APPROVAL_PUBLIC_KEY }}
+        run: |
+          : "${GOOGLE_API_KEY:?GOOGLE_API_KEY secret is empty/unset}"
+          : "${APPROVAL_PUBLIC_KEY:?APPROVAL_PUBLIC_KEY secret is empty/unset}"
+          printf 'GOOGLE_API_KEY=%s\n' "$GOOGLE_API_KEY" > .env
+          printf 'APPROVAL_PUBLIC_KEY=%s\n' "$APPROVAL_PUBLIC_KEY" >> .env
+      - name: Setup Shorebird
+        uses: shorebirdtech/setup-shorebird@v1
+        with:
+          cache: true
+      - name: Shorebird Release Android
+        uses: shorebirdtech/shorebird-release@v1
+        env:
+          SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+        with:
+          platform: android
+          flutter-version: "3.41.9"
+      - name: Upload AAB to Play Console
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_STORE_SERVICE_ACCOUNT_JSON }}
+          packageName: com.example.app
+          releaseFiles: build/app/outputs/bundle/release/app-release.aab
+          track: ${{ github.event.inputs.play_track || 'internal' }}
+          status: completed

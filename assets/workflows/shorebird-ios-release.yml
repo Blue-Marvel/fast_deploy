@@ -1,0 +1,157 @@
+name: Shorebird iOS Release
+
+on:
+  workflow_dispatch:
+
+jobs:
+  release:
+    runs-on: macos-15
+    env:
+      LC_ALL: en_US.UTF-8
+      LANG: en_US.UTF-8
+      APP_IDENTIFIER: com.example.app
+      MATCH_GIT_BRANCH: main
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v4
+
+      - name: Select Xcode 26
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - name: Create .env file
+        env:
+          GOOGLE_API_KEY: ${{ secrets.GOOGLE_API_KEY }}
+          APPROVAL_PUBLIC_KEY: ${{ secrets.APPROVAL_PUBLIC_KEY }}
+        run: |
+          : "${GOOGLE_API_KEY:?GOOGLE_API_KEY secret is empty/unset}"
+          : "${APPROVAL_PUBLIC_KEY:?APPROVAL_PUBLIC_KEY secret is empty/unset}"
+          printf 'GOOGLE_API_KEY=%s\n' "$GOOGLE_API_KEY" > .env
+          printf 'APPROVAL_PUBLIC_KEY=%s\n' "$APPROVAL_PUBLIC_KEY" >> .env
+
+      - name: Parse iOS signing secrets
+        env:
+          IOS_SECRETS: ${{ secrets.IOS_DISTRIBUTION_JSON }}
+        run: |
+          set -euo pipefail
+
+          TEAM_ID=$(jq -r '.TEAM_ID' <<< "$IOS_SECRETS")
+          APPLE_ID=$(jq -r '.APPLE_ID' <<< "$IOS_SECRETS")
+          ASC_ISSUER_ID=$(jq -r '.APP_STORE_CONNECT_API_ISSUER_ID' <<< "$IOS_SECRETS")
+          ASC_KEY_ID=$(jq -r '.APP_STORE_CONNECT_API_KEY_ID' <<< "$IOS_SECRETS")
+          MATCH_GIT_URL=$(jq -r '.MATCH_SIGNING_GIT_URL' <<< "$IOS_SECRETS")
+          MATCH_PASSWORD=$(jq -r '.MATCH_PASSWORD' <<< "$IOS_SECRETS")
+
+          ASC_KEY_PATH="$RUNNER_TEMP/asc_api_key.p8"
+          jq -r '.APP_STORE_CONNECT_API_KEY_CONTENT' <<< "$IOS_SECRETS" > "$ASC_KEY_PATH"
+          chmod 600 "$ASC_KEY_PATH"
+
+          mkdir -p ~/.ssh
+          chmod 700 ~/.ssh
+          jq -r '.MATCH_GIT_SSH_KEY' <<< "$IOS_SECRETS" > ~/.ssh/match_key
+          chmod 600 ~/.ssh/match_key
+
+          MATCH_HOST=$(echo "$MATCH_GIT_URL" | sed -E 's|^git@([^:]+):.*|\1|')
+          ssh-keyscan -H "$MATCH_HOST" >> ~/.ssh/known_hosts 2>/dev/null
+
+          ASC_API_KEY_JSON="$RUNNER_TEMP/asc_api_key.json"
+          jq -n \
+            --arg key_id "$ASC_KEY_ID" \
+            --arg issuer_id "$ASC_ISSUER_ID" \
+            --rawfile key "$ASC_KEY_PATH" \
+            '{key_id: $key_id, issuer_id: $issuer_id, key: $key, in_house: false}' \
+            > "$ASC_API_KEY_JSON"
+
+          echo "::add-mask::$MATCH_PASSWORD"
+          echo "::add-mask::$TEAM_ID"
+
+          {
+            echo "TEAM_ID=$TEAM_ID"
+            echo "APPLE_ID=$APPLE_ID"
+            echo "MATCH_GIT_URL=$MATCH_GIT_URL"
+            echo "MATCH_PASSWORD=$MATCH_PASSWORD"
+            echo "ASC_API_KEY_JSON=$ASC_API_KEY_JSON"
+            echo "GIT_SSH_COMMAND=ssh -i $HOME/.ssh/match_key -o IdentitiesOnly=yes -o StrictHostKeyChecking=accept-new"
+          } >> "$GITHUB_ENV"
+
+      - name: Setup Ruby & fastlane
+        uses: ruby/setup-ruby@v1
+        with:
+          ruby-version: '3.2'
+
+      - name: Install fastlane
+        run: gem install fastlane --no-document
+
+      - name: Create temporary signing keychain
+        run: |
+          set -euo pipefail
+          KEYCHAIN_PATH="$RUNNER_TEMP/build.keychain"
+          KEYCHAIN_PASSWORD="$(openssl rand -base64 32)"
+
+          security create-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security set-keychain-settings -lut 21600 "$KEYCHAIN_PATH"
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" "$KEYCHAIN_PATH"
+          security list-keychains -d user -s "$KEYCHAIN_PATH" $(security list-keychains -d user | tr -d '"')
+          security default-keychain -s "$KEYCHAIN_PATH"
+
+          echo "::add-mask::$KEYCHAIN_PASSWORD"
+          {
+            echo "MATCH_KEYCHAIN_NAME=$KEYCHAIN_PATH"
+            echo "MATCH_KEYCHAIN_PASSWORD=$KEYCHAIN_PASSWORD"
+          } >> "$GITHUB_ENV"
+
+      - name: Fetch signing assets via fastlane match
+        run: |
+          fastlane match appstore \
+            --readonly true \
+            --git_url "$MATCH_GIT_URL" \
+            --git_branch "$MATCH_GIT_BRANCH" \
+            --app_identifier "$APP_IDENTIFIER" \
+            --team_id "$TEAM_ID" \
+            --api_key_path "$ASC_API_KEY_JSON"
+
+      - name: Switch Xcode project to manual signing
+        run: |
+          set -euo pipefail
+          security find-identity -v -p codesigning "$MATCH_KEYCHAIN_NAME"
+
+          fastlane run update_code_signing_settings \
+            path:"ios/Runner.xcodeproj" \
+            use_automatic_signing:false \
+            team_id:"$TEAM_ID" \
+            code_sign_identity:"Apple Distribution" \
+            profile_name:"match AppStore $APP_IDENTIFIER" \
+            bundle_identifier:"$APP_IDENTIFIER" \
+            targets:"Runner"
+
+      - name: Setup Shorebird
+        uses: shorebirdtech/setup-shorebird@v1
+        with:
+          cache: true
+
+      - name: Shorebird Release iOS
+        uses: shorebirdtech/shorebird-release@v1
+        env:
+          SHOREBIRD_TOKEN: ${{ secrets.SHOREBIRD_TOKEN }}
+        with:
+          platform: ios
+          flutter-version: "3.41.9"
+          args: "--export-method app-store -- --obfuscate --split-debug-info=build/ios/symbols"
+
+      - name: Upload IPA to TestFlight
+        run: |
+          set -euo pipefail
+          IPA_PATH=$(ls build/ios/ipa/*.ipa | head -n 1)
+          if [ -z "$IPA_PATH" ]; then
+            echo "No IPA found in build/ios/ipa/" >&2
+            exit 1
+          fi
+          echo "Uploading $IPA_PATH to TestFlight"
+          fastlane pilot upload \
+            --api_key_path "$ASC_API_KEY_JSON" \
+            --app_identifier "$APP_IDENTIFIER" \
+            --team_id "$TEAM_ID" \
+            --ipa "$IPA_PATH" \
+            --skip_waiting_for_build_processing true \
+            --skip_submission true
